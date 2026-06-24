@@ -44,9 +44,19 @@ Item {
     
     property bool locked: true
     property var entries: []
-    property string entryId: ""
-    property string passwd: ""
     property var foldersList: []
+
+    // Pending action after launcher close
+    property string pendingEntryId: ""
+    property string pendingAction: ""  // "type" or "copy"
+
+    // Copy mode: when true, activating an entry copies to clipboard instead of typing
+    property bool copyMode: false
+
+    readonly property string defaultAction:
+        pluginApi?.pluginSettings?.defaultAction ??
+        pluginApi?.manifest?.metadata?.defaultSettings?.defaultAction ??
+        "type"
 
     function handleCommand(query) {
         return query.startsWith(">rbw");
@@ -109,6 +119,7 @@ Item {
 
     function init() {
         Logger.i("RBW", "Initialized");
+        copyMode = (defaultAction === "copy");
         checkUnlockedProcess.running = true;
     }
 
@@ -118,10 +129,11 @@ Item {
     }
 
     function onClosed() {
-        if (root.entryId) {
-            Logger.i("RBW", "Getting entry with ID " + root.entryId);
-            getEntryProcess.getEntry(root.entryId);
-            root.entryId = "";
+        if (root.pendingEntryId) {
+            Logger.i("RBW", "Getting entry with ID " + root.pendingEntryId + " (action: " + root.pendingAction + ")");
+            getEntryProcess.getEntry(root.pendingEntryId, root.pendingAction);
+            root.pendingEntryId = "";
+            root.pendingAction = "";
         }
     }
 
@@ -129,8 +141,8 @@ Item {
         return [
             {
                 "name": ">rbw",
-                "description": "RBW launcher plugin",
-                "icon": "terminal",
+                "description": "Search Bitwarden passwords with RBW",
+                "icon": "key",
                 "isTablerIcon": true,
                 "isImage": false,
                 "onActivate": function () {
@@ -225,12 +237,35 @@ Item {
                 "isImage": !!faviconUrl,
                 "provider": root,
                 "onActivate": function () {
-                root.entryId = entryId;
-                launcher.close();
+                    root.pendingEntryId = entryId;
+                    root.pendingAction = root.copyMode ? "copy" : "type";
+                    launcher.close();
                 }
             };
             })(entry.id, entry.name, entry.user, entry.uris, entry.type, entry.folder);
         });
+
+        filtered.sort((a, b) => {
+            const nameA = a.name.toLowerCase();
+            const nameB = b.name.toLowerCase();
+            if (nameA < nameB) return -1;
+            if (nameA > nameB) return 1;
+            return 0;
+        });
+
+        // Copy mode toggle — appended after sort so it always appears at the bottom
+        filtered.push({
+            "name": root.copyMode ? "Copy Mode: ON" : "Copy Mode: OFF",
+            "description": root.copyMode ? "Entries will be copied to clipboard — click to switch to Type Mode" : "Entries will be typed via wtype — click to switch to Copy Mode",
+            "icon": root.copyMode ? "clipboard-check" : "clipboard",
+            "isTablerIcon": true,
+            "isImage": false,
+            "onActivate": function () {
+                root.copyMode = !root.copyMode;
+                if (launcher) launcher.updateResults();
+            }
+        });
+
         filtered.push({
             "name": "Lock",
             "description": "Lock rbw agent",
@@ -243,22 +278,12 @@ Item {
                 lockProcess.running = true;
             }
         });
-        filtered.sort((a, b) => {
-            const nameA = a.name.toLowerCase();
-            const nameB = b.name.toLowerCase();
-            if (nameA < nameB) {
-                return -1;
-            }
-            if (nameA > nameB) {
-                return 1;
-            }
-            return 0;
-        });
+
         return filtered;
     }
 
     function getImageUrl(modelData) {
-        if( modelData.isImage) {
+        if (modelData.isImage) {
             return modelData.icon;
         } else {
             return null;
@@ -344,6 +369,7 @@ Item {
         running: false
 
         property string output: ""
+        property string pendingAction: ""
 
         onExited: function (exitCode, _exitStatus) {
             if (exitCode !== 0) {
@@ -352,7 +378,11 @@ Item {
             }
             Logger.d("RBW", `rbw get succeeded with ${exitCode}`);
             var entry = JSON.parse(getEntryProcess.output);
-            wtypeProcess.type(entry.data.password);
+            if (getEntryProcess.pendingAction === "copy") {
+                wlCopyProcess.copy(entry.data.password);
+            } else {
+                wtypeProcess.type(entry.data.password);
+            }
         }
 
         stdout: StdioCollector {
@@ -361,7 +391,8 @@ Item {
             }
         }
 
-        function getEntry(passwordId) {
+        function getEntry(passwordId, action) {
+            getEntryProcess.pendingAction = action || "type";
             getEntryProcess.exec(["rbw", "get", passwordId, "--raw"]);
         }
     }
@@ -372,16 +403,33 @@ Item {
 
         onExited: function (exitCode, _exitStatus) {
             if (exitCode !== 0) {
-                Logger.e("RBW", `Wtype failed with ${exitCode}`);
+                Logger.e("RBW", `wtype failed with ${exitCode}`);
                 return;
             }
-            Logger.d("RBW", `Wtype succeeded with ${exitCode}`);
-            root.entryId = "";
-            root.passwd = "";
+            Logger.d("RBW", "wtype succeeded");
         }
 
         function type(password) {
             wtypeProcess.exec(["wtype", password]);
+        }
+    }
+
+    Process {
+        id: wlCopyProcess
+        running: false
+
+        onExited: function (exitCode, _exitStatus) {
+            if (exitCode !== 0) {
+                Logger.e("RBW", `wl-copy failed with ${exitCode}`);
+                return;
+            }
+            Logger.d("RBW", "Copied to clipboard");
+        }
+
+        function copy(password) {
+            // Use printf to safely pipe password to wl-copy, handling special characters
+            var escaped = password.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
+            wlCopyProcess.exec(["sh", "-c", "printf '%s' '" + escaped + "' | wl-copy"]);
         }
     }
 }

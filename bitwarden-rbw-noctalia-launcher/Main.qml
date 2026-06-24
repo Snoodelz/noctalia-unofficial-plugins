@@ -95,6 +95,6 @@ Item {
             ipcUnlockProcess.running = true;
         }
 
-        target: "plugin:bitwarden-rbw-launcher"
+        target: "plugin:bitwarden-rbw-noctalia-launcher"
     }
 }
