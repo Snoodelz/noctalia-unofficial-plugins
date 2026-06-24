@@ -129,11 +129,14 @@ Item {
     }
 
     function onClosed() {
+        Logger.i("RBW", "Launcher closed handler called");
         if (root.pendingEntryId) {
             Logger.i("RBW", "Getting entry with ID " + root.pendingEntryId + " (action: " + root.pendingAction + ")");
             getEntryProcess.getEntry(root.pendingEntryId, root.pendingAction);
             root.pendingEntryId = "";
             root.pendingAction = "";
+        } else {
+            Logger.i("RBW", "No pending entry ID");
         }
     }
 
@@ -237,8 +240,10 @@ Item {
                 "isImage": !!faviconUrl,
                 "provider": root,
                 "onActivate": function () {
+                    Logger.i("RBW", "Entry activated: " + entryName + " (action: " + (root.copyMode ? "copy" : "type") + ")");
                     root.pendingEntryId = entryId;
                     root.pendingAction = root.copyMode ? "copy" : "type";
+                    Logger.i("RBW", "Closing launcher with pending entry: " + entryId);
                     launcher.close();
                 }
             };
@@ -376,11 +381,14 @@ Item {
                 Logger.e("RBW", `rbw get failed with ${exitCode}`);
                 return;
             }
-            Logger.d("RBW", `rbw get succeeded with ${exitCode}`);
+            Logger.d("RBW", `rbw get succeeded, parsing output`);
             var entry = JSON.parse(getEntryProcess.output);
+            Logger.i("RBW", "Entry retrieved, action: " + getEntryProcess.pendingAction);
             if (getEntryProcess.pendingAction === "copy") {
+                Logger.i("RBW", "Initiating copy to clipboard");
                 wlCopyProcess.copy(entry.data.password);
             } else {
+                Logger.i("RBW", "Initiating type password");
                 wtypeProcess.type(entry.data.password);
             }
         }
@@ -392,6 +400,7 @@ Item {
         }
 
         function getEntry(passwordId, action) {
+            Logger.i("RBW", "getEntry called with ID: " + passwordId + ", action: " + action);
             getEntryProcess.pendingAction = action || "type";
             getEntryProcess.exec(["rbw", "get", passwordId, "--raw"]);
         }
@@ -440,12 +449,14 @@ Item {
         property string lastPassword: ""
 
         function copy(password) {
+            Logger.i("RBW", "copy() called, password length: " + password.length);
             lastPassword = password;
             isFallback = false;
             Logger.d("RBW", "Copying password to clipboard via wl-copy");
             // Properly escape single quotes in the password for shell safety
             // Single quotes preserve everything literally except single quotes themselves
             var escaped = password.replace(/'/g, "'\\''");
+            Logger.d("RBW", "Escaped password, calling exec with wl-copy");
             wlCopyProcess.exec(["sh", "-c", "printf '%s' '" + escaped + "' | wl-copy"]);
         }
     }
