@@ -417,18 +417,35 @@ Item {
     Process {
         id: wlCopyProcess
         running: false
+        property bool isFallback: false
 
         onExited: function (exitCode, _exitStatus) {
             if (exitCode !== 0) {
-                Logger.e("RBW", `wl-copy failed with ${exitCode}`);
+                var toolName = wlCopyProcess.isFallback ? "xclip" : "wl-copy";
+                Logger.e("RBW", `${toolName} failed with ${exitCode}. Ensure wl-copy is installed and WAYLAND_DISPLAY is set.`);
+                
+                // If wl-copy failed and we haven't tried fallback, try xclip
+                if (!wlCopyProcess.isFallback) {
+                    Logger.i("RBW", "Attempting fallback to xclip");
+                    wlCopyProcess.isFallback = true;
+                    var escaped = wlCopyProcess.lastPassword.replace(/'/g, "'\\''");
+                    wlCopyProcess.exec(["sh", "-c", "printf '%s' '" + escaped + "' | xclip -selection clipboard"]);
+                }
                 return;
             }
-            Logger.d("RBW", "Copied to clipboard");
+            var toolName = wlCopyProcess.isFallback ? "xclip" : "wl-copy";
+            Logger.d("RBW", `Copied to clipboard using ${toolName}`);
         }
 
+        property string lastPassword: ""
+
         function copy(password) {
-            // Use printf to safely pipe password to wl-copy, handling special characters
-            var escaped = password.replace(/\\/g, "\\\\").replace(/'/g, "'\\''");
+            lastPassword = password;
+            isFallback = false;
+            Logger.d("RBW", "Copying password to clipboard via wl-copy");
+            // Properly escape single quotes in the password for shell safety
+            // Single quotes preserve everything literally except single quotes themselves
+            var escaped = password.replace(/'/g, "'\\''");
             wlCopyProcess.exec(["sh", "-c", "printf '%s' '" + escaped + "' | wl-copy"]);
         }
     }
