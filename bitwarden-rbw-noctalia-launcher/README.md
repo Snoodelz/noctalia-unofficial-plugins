@@ -8,7 +8,7 @@ A Bitwarden/Vaultwarden password manager integration for Noctalia launcher using
 
 - Unlock/lock RBW vault directly from the launcher
 - Search and filter password entries by name, username, or website
-- Auto-type passwords using wtype
+- Copy passwords to clipboard with one click
 - Display website favicons for visual identification
 - Browse entries by folder with category filtering
 - Different icons for different entry types (Login, Card, Note, Identity)
@@ -18,12 +18,12 @@ A Bitwarden/Vaultwarden password manager integration for Noctalia launcher using
 ## Requirements
 
 - [rbw](https://github.com/doy/rbw) - Rust Bitwarden CLI client
-- `wtype` - Wayland typing tool for auto-typing passwords
+- `wl-copy` or `xclip` - Clipboard tools (wl-copy for Wayland, xclip for X11)
 - `curl` - For downloading favicons (uses Google's favicon service)
 
 ## Installation
 
-1. Ensure `rbw` and `wtype` are installed
+1. Ensure `rbw` and clipboard tools (`wl-copy` or `xclip`) are installed
 2. Configure rbw: `rbw config set email your@email.com`
 3. Enable the plugin in Noctalia settings
 4. Unlock your vault: `rbw unlock` (or use `>rbw` in launcher)

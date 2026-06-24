@@ -21,7 +21,7 @@
     {
       "id": "bitwarden-rbw-noctalia-launcher",
       "name": "Bitwarden RBW Noctalia Launcher",
-      "version": "1.3.4",
+      "version": "1.3.3",
       "official": false,
       "author": "snoodelz, rukh-debug <talkto-at-rubenk.dev>",
       "description": "RBW Bitwarden/Valutwarden client plugin for Noctalia launcher",

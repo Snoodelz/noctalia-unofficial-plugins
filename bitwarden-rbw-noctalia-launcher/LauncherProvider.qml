@@ -46,17 +46,7 @@ Item {
     property var entries: []
     property var foldersList: []
 
-    // Pending action after launcher close
-    property string pendingEntryId: ""
-    property string pendingAction: ""  // "type" or "copy"
 
-    // Copy mode: when true, activating an entry copies to clipboard instead of typing
-    property bool copyMode: false
-
-    readonly property string defaultAction:
-        pluginApi?.pluginSettings?.defaultAction ??
-        pluginApi?.manifest?.metadata?.defaultSettings?.defaultAction ??
-        "type"
 
     function handleCommand(query) {
         return query.startsWith(">rbw");
@@ -119,7 +109,6 @@ Item {
 
     function init() {
         Logger.i("RBW", "Initialized");
-        copyMode = (defaultAction === "copy");
         checkUnlockedProcess.running = true;
     }
 
@@ -233,10 +222,9 @@ Item {
                 "isImage": !!faviconUrl,
                 "provider": root,
                 "onActivate": function () {
-                    Logger.i("RBW", "Entry activated: " + entryName + " (action: " + (root.copyMode ? "copy" : "type") + ")");
-                    var actionType = root.copyMode ? "copy" : "type";
-                    Logger.i("RBW", "Retrieving entry with ID: " + entryId);
-                    getEntryProcess.getEntry(entryId, actionType);
+                    Logger.i("RBW", "Entry activated: " + entryName);
+                    Logger.i("RBW", "Retrieving entry with ID: " + entryId + " for clipboard copy");
+                    getEntryProcess.getEntry(entryId, "copy");
                     launcher.close();
                 }
             };
@@ -249,19 +237,6 @@ Item {
             if (nameA < nameB) return -1;
             if (nameA > nameB) return 1;
             return 0;
-        });
-
-        // Copy mode toggle — appended after sort so it always appears at the bottom
-        filtered.push({
-            "name": root.copyMode ? "Copy Mode: ON" : "Copy Mode: OFF",
-            "description": root.copyMode ? "Entries will be copied to clipboard — click to switch to Type Mode" : "Entries will be typed via wtype — click to switch to Copy Mode",
-            "icon": root.copyMode ? "clipboard-check" : "clipboard",
-            "isTablerIcon": true,
-            "isImage": false,
-            "onActivate": function () {
-                root.copyMode = !root.copyMode;
-                if (launcher) launcher.updateResults();
-            }
         });
 
         filtered.push({
@@ -376,14 +351,8 @@ Item {
             }
             Logger.d("RBW", `rbw get succeeded, parsing output`);
             var entry = JSON.parse(getEntryProcess.output);
-            Logger.i("RBW", "Entry retrieved, action: " + getEntryProcess.pendingAction);
-            if (getEntryProcess.pendingAction === "copy") {
-                Logger.i("RBW", "Initiating copy to clipboard");
-                wlCopyProcess.copy(entry.data.password);
-            } else {
-                Logger.i("RBW", "Initiating type password");
-                wtypeProcess.type(entry.data.password);
-            }
+            Logger.i("RBW", "Entry retrieved, copying to clipboard");
+            wlCopyProcess.copy(entry.data.password);
         }
 
         stdout: StdioCollector {
@@ -393,26 +362,9 @@ Item {
         }
 
         function getEntry(passwordId, action) {
-            Logger.i("RBW", "getEntry called with ID: " + passwordId + ", action: " + action);
-            getEntryProcess.pendingAction = action || "type";
+            Logger.i("RBW", "getEntry called with ID: " + passwordId + " for clipboard copy");
+            getEntryProcess.pendingAction = action || "copy";
             getEntryProcess.exec(["rbw", "get", passwordId, "--raw"]);
-        }
-    }
-
-    Process {
-        id: wtypeProcess
-        running: false
-
-        onExited: function (exitCode, _exitStatus) {
-            if (exitCode !== 0) {
-                Logger.e("RBW", `wtype failed with ${exitCode}`);
-                return;
-            }
-            Logger.d("RBW", "wtype succeeded");
-        }
-
-        function type(password) {
-            wtypeProcess.exec(["wtype", password]);
         }
     }
 
