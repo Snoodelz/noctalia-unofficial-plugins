@@ -129,15 +129,8 @@ Item {
     }
 
     function onClosed() {
-        Logger.i("RBW", "Launcher closed handler called");
-        if (root.pendingEntryId) {
-            Logger.i("RBW", "Getting entry with ID " + root.pendingEntryId + " (action: " + root.pendingAction + ")");
-            getEntryProcess.getEntry(root.pendingEntryId, root.pendingAction);
-            root.pendingEntryId = "";
-            root.pendingAction = "";
-        } else {
-            Logger.i("RBW", "No pending entry ID");
-        }
+        // Handler for launcher closing - can be used for cleanup if needed
+        Logger.i("RBW", "Launcher closed");
     }
 
     function commands() {
@@ -241,9 +234,9 @@ Item {
                 "provider": root,
                 "onActivate": function () {
                     Logger.i("RBW", "Entry activated: " + entryName + " (action: " + (root.copyMode ? "copy" : "type") + ")");
-                    root.pendingEntryId = entryId;
-                    root.pendingAction = root.copyMode ? "copy" : "type";
-                    Logger.i("RBW", "Closing launcher with pending entry: " + entryId);
+                    var actionType = root.copyMode ? "copy" : "type";
+                    Logger.i("RBW", "Retrieving entry with ID: " + entryId);
+                    getEntryProcess.getEntry(entryId, actionType);
                     launcher.close();
                 }
             };
